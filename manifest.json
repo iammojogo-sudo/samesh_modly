@@ -1,0 +1,129 @@
+{
+  "id": "samesh-mesh-seg",
+  "name": "SAMesh Mesh Segmentation",
+  "type": "model",
+  "source": "https://github.com/iammojogo-sudo/samesh_modly",
+  "description": "Zero-shot 3D mesh part segmentation using SAMesh + SAM2. Splits a mesh into semantically meaningful parts without any training.",
+  "version": "1.0.0",
+  "author": "iammojogo",
+  "vram_gb": 6,
+  "tags": [
+    "mesh",
+    "segmentation",
+    "parts",
+    "samesh",
+    "sam2",
+    "zero-shot"
+  ],
+  "generator_class": "SAMeshGenerator",
+  "nodes": [
+    {
+      "id": "segment-mesh",
+      "name": "Segment Mesh",
+      "inputs": [
+        "mesh"
+      ],
+      "input": "mesh",
+      "output": "mesh",
+      "hf_repo": "facebook/sam2-hiera-large",
+      "download_check": "sam2_hiera_small.pt",
+      "params_schema": [
+        {
+          "id": "sam2_size",
+          "label": "SAM2 Model",
+          "type": "select",
+          "default": "small",
+          "options": [
+            {
+              "value": "small",
+              "label": "Small (~40 MB, fast)"
+            },
+            {
+              "value": "large",
+              "label": "Large (~2.5 GB, best quality)"
+            }
+          ],
+          "tooltip": "SAM2 checkpoint size. Small is faster and uses less VRAM. Large gives more precise segment boundaries."
+        },
+        {
+          "id": "render_modalities",
+          "label": "Render Modalities",
+          "type": "select",
+          "default": "sdf_norms",
+          "options": [
+            {
+              "value": "sdf_norms",
+              "label": "SDF + Normals (default)"
+            },
+            {
+              "value": "sdf_norms_matte",
+              "label": "SDF + Normals + Matte (detailed)"
+            },
+            {
+              "value": "norms_matte",
+              "label": "Normals + Matte"
+            },
+            {
+              "value": "matte",
+              "label": "Matte only (low-poly)"
+            }
+          ],
+          "tooltip": "Which rendering modalities SAMesh uses to detect part boundaries. SDF+Normals works best for most shapes."
+        },
+        {
+          "id": "render_resolution",
+          "label": "Render Resolution",
+          "type": "select",
+          "default": 1024,
+          "options": [
+            {
+              "value": 512,
+              "label": "512 (fast)"
+            },
+            {
+              "value": 1024,
+              "label": "1024 (default)"
+            }
+          ],
+          "tooltip": "Resolution of multiview renders. Higher = better segmentation but slower."
+        },
+        {
+          "id": "points_per_side",
+          "label": "SAM Mask Density",
+          "type": "select",
+          "default": 32,
+          "options": [
+            {
+              "value": 16,
+              "label": "16 (fast, coarse)"
+            },
+            {
+              "value": 32,
+              "label": "32 (default)"
+            },
+            {
+              "value": 64,
+              "label": "64 (detailed, slow)"
+            }
+          ],
+          "tooltip": "SAM2 automatic mask generation density. Higher = more masks = slower but more precise boundaries."
+        },
+        {
+          "id": "smoothing_iterations",
+          "label": "Smoothing",
+          "type": "int",
+          "default": 64,
+          "min": 0,
+          "max": 200,
+          "tooltip": "Number of boundary smoothing iterations. 0 = no smoothing, 64 = default."
+        }
+      ]
+    }
+  ],
+  "setup": {
+    "kind": "python-root-setup-py",
+    "entry": "setup.py",
+    "owner": "electron",
+    "install_behavior": "explicit-managed-setup"
+  }
+}
