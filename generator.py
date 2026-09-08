@@ -81,9 +81,10 @@ def _setup_opengl_platform():
     """Try to set up OpenGL platform for pyrender on Windows."""
     if "PYOPENGL_PLATFORM" in os.environ:
         return
+    # On Windows, don't set PYOPENGL_PLATFORM — let PyOpenGL use
+    # the native opengl32.dll driver (WGL). EGL/OSMesa are Linux-only.
     if os.name == "nt":
-        os.environ["PYOPENGL_PLATFORM"] = "egl"
-        print("%s Set PYOPENGL_PLATFORM=egl for Windows." % _LOG)
+        print("%s Using default Windows OpenGL backend." % _LOG)
 
 
 class SAMeshGenerator(BaseGenerator):
@@ -136,8 +137,9 @@ class SAMeshGenerator(BaseGenerator):
         return None
 
     def is_downloaded(self) -> bool:
-        return (self._find_checkpoint("small") is not None
-                or self._find_checkpoint("large") is not None)
+        small = self._find_checkpoint("small")
+        large = self._find_checkpoint("large")
+        return small is not None or large is not None
 
     def _ensure_samesh_on_path(self):
         samesh_dir = Path(__file__).parent / "samesh"

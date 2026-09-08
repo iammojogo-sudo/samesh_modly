@@ -26,7 +26,7 @@
       "input": "mesh",
       "output": "mesh",
       "hf_repo": "facebook/sam2-hiera-large",
-      "download_check": "sam2_hiera_small.pt",
+      "download_check": "sam2_hiera_large.pt",
       "params_schema": [
         {
           "id": "sam2_size",
