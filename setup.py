@@ -166,6 +166,23 @@ def setup(python_exe, ext_dir, gpu_sm):
             print("[setup] WARNING: Could not patch sam_mesh.py: %s" % e)
 
     # ------------------------------------------------------------------ #
+    # Patch shape_diameter_function.py to fix jet colormap with trimesh
+    # ------------------------------------------------------------------ #
+    sdf_patch = samesh_dir / "src" / "samesh" / "models" / "shape_diameter_function.py"
+    if sdf_patch.exists():
+        try:
+            content = sdf_patch.read_text(encoding="utf-8")
+            patched = content.replace(
+                "color_map='jet'",
+                "color_map=__import__('matplotlib').pyplot.get_cmap('jet')",
+            )
+            if patched != content:
+                sdf_patch.write_text(patched, encoding="utf-8")
+                print("[setup] Patched shape_diameter_function.py for jet colormap fix.")
+        except Exception as e:
+            print("[setup] WARNING: Could not patch shape_diameter_function.py: %s" % e)
+
+    # ------------------------------------------------------------------ #
     # Patch pyproject.toml to allow Python 3.11
     # ------------------------------------------------------------------ #
     pyproject = samesh_dir / "pyproject.toml"
