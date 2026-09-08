@@ -149,6 +149,23 @@ def setup(python_exe, ext_dir, gpu_sm):
         print("[setup] SAMesh repo already exists, skipping clone.")
 
     # ------------------------------------------------------------------ #
+    # Patch sam_mesh.py to fix None cache path on Python 3.11
+    # ------------------------------------------------------------------ #
+    sam_mesh_patch = samesh_dir / "src" / "samesh" / "models" / "sam_mesh.py"
+    if sam_mesh_patch.exists():
+        try:
+            content = sam_mesh_patch.read_text(encoding="utf-8")
+            patched = content.replace(
+                'config.cache  = Path(config.cache)  / filename.stem if "cache" in config else None',
+                'config.cache  = Path(config.cache)  / filename.stem if "cache" in config and config.cache else None',
+            )
+            if patched != content:
+                sam_mesh_patch.write_text(patched, encoding="utf-8")
+                print("[setup] Patched sam_mesh.py for Python 3.11 cache path fix.")
+        except Exception as e:
+            print("[setup] WARNING: Could not patch sam_mesh.py: %s" % e)
+
+    # ------------------------------------------------------------------ #
     # Patch pyproject.toml to allow Python 3.11
     # ------------------------------------------------------------------ #
     pyproject = samesh_dir / "pyproject.toml"
