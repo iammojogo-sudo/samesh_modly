@@ -333,13 +333,20 @@ class SAMeshGenerator(BaseGenerator):
             with torch.inference_mode():
                 torch.cuda.empty_cache()
                 with torch.autocast(device_type="cuda", dtype=torch.float16):
-                    segmented_mesh = segment_mesh(
-                        filename=mesh_path,
-                        config=config,
-                        visualize=False,
-                        extension="glb",
-                        texture=False,
-                    )
+                    try:
+                        segmented_mesh = segment_mesh(
+                            filename=mesh_path,
+                            config=config,
+                            visualize=False,
+                            extension="glb",
+                            texture=False,
+                        )
+                    except (ValueError, IndexError) as e:
+                        if "empty" in str(e).lower():
+                            print("%s Segmentation returned no parts, using original mesh: %s" % (_LOG, e))
+                            segmented_mesh = trimesh.load(mesh_path, force="mesh")
+                        else:
+                            raise
 
             self._check_cancelled(cancel_event)
             self._report(progress_cb, 85, "Splitting into parts...")
