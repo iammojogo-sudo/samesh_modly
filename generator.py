@@ -13,6 +13,13 @@ from pathlib import Path
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 import numpy as np
+_original_percentile = np.percentile
+def _safe_percentile(a, q, **kwargs):
+    if len(a) == 0:
+        return kwargs.get("default", 0)
+    return _original_percentile(a, q, **kwargs)
+np.percentile = _safe_percentile
+
 import torch
 import trimesh
 
@@ -261,6 +268,13 @@ class SAMeshGenerator(BaseGenerator):
             self._check_cancelled(cancel_event)
 
             from omegaconf import OmegaConf
+            from samesh.models import sam_mesh as _sam_mesh_mod
+            import numpy as _np
+            _orig_pct = _np.percentile
+            def _safe_pct(a, q, **kw):
+                return _orig_pct(a, q, **kw) if len(a) else kw.get("default", 0)
+            _np.percentile = _safe_pct
+            _sam_mesh_mod.np.percentile = _safe_pct
             from samesh.models.sam_mesh import segment_mesh
 
             cache_dir = None
