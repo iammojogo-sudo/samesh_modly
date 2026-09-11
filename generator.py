@@ -311,6 +311,17 @@ class SAMeshGenerator(BaseGenerator):
             _np.percentile = _safe_pct
             _sam_mesh_mod.np.percentile = _safe_pct
 
+            _orig_smooth = _sam_mesh_mod.SamModelMesh.smooth
+            def _safe_smooth(self, face2label_consistent):
+                try:
+                    return _orig_smooth(self, face2label_consistent)
+                except ValueError as e:
+                    if "empty sequence" in str(e):
+                        print("%s smooth() failed on empty components, skipping smoothing" % _LOG)
+                        return face2label_consistent
+                    raise
+            _sam_mesh_mod.SamModelMesh.smooth = _safe_smooth
+
             from samesh.renderer import renderer as _renderer_mod
             _renderer_mod.tqdm = _ProgressTqdm
             from samesh.models import shape_diameter_function as _sdf_mod
@@ -382,12 +393,11 @@ class SAMeshGenerator(BaseGenerator):
                             extension="glb",
                             texture=False,
                         )
-                    except (ValueError, IndexError) as e:
-                        if "empty" in str(e).lower():
-                            print("%s Segmentation returned no parts, using original mesh: %s" % (_LOG, e))
-                            segmented_mesh = trimesh.load(mesh_path, force="mesh")
-                        else:
-                            raise
+                    except Exception as e:
+                        print("%s WARNING: segment_mesh failed (%s: %s), using original mesh" % (_LOG, type(e).__name__, e))
+                        import traceback
+                        traceback.print_exc()
+                        segmented_mesh = trimesh.load(mesh_path, force="mesh")
 
             self._check_cancelled(cancel_event)
             self._report(progress_cb, 85, "Splitting into parts...")
