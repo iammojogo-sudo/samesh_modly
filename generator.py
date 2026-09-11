@@ -268,13 +268,54 @@ class SAMeshGenerator(BaseGenerator):
             self._check_cancelled(cancel_event)
 
             from omegaconf import OmegaConf
+
+            import tqdm as _tqdm_mod
+            _RealTqdm = _tqdm_mod.tqdm
+
+            class _ProgressTqdm(_RealTqdm):
+                def __init__(self, *args, **kwargs):
+                    self._pct_cb = progress_cb
+                    self._desc = kwargs.get("desc", "") or (args[1] if len(args) > 1 else "") or ""
+                    self._total = kwargs.get("total", None)
+                    self._n = 0
+                    super().__init__(*args, **kwargs)
+
+                def update(self, n=1):
+                    self._n += n
+                    self._flush_progress()
+                    super().update(n)
+
+                def _flush_progress(self):
+                    if not self._pct_cb or not self._total:
+                        return
+                    frac = min(self._n / self._total, 1.0)
+                    desc_lower = self._desc.lower()
+                    if "render" in desc_lower:
+                        pct = int(15 + frac * 20)
+                    elif "sam mask" in desc_lower or "computing sam" in desc_lower:
+                        pct = int(35 + frac * 45)
+                    elif "sdf" in desc_lower:
+                        pct = int(35 + frac * 45)
+                    else:
+                        pct = int(15 + frac * 65)
+                    self._pct_cb(pct, self._desc.strip() or "Processing...")
+
+            _tqdm_mod.tqdm = _ProgressTqdm
+
             from samesh.models import sam_mesh as _sam_mesh_mod
+            _sam_mesh_mod.tqdm = _ProgressTqdm
             import numpy as _np
             _orig_pct = _np.percentile
             def _safe_pct(a, q, **kw):
                 return _orig_pct(a, q, **kw) if len(a) else kw.get("default", 0)
             _np.percentile = _safe_pct
             _sam_mesh_mod.np.percentile = _safe_pct
+
+            from samesh.renderer import renderer as _renderer_mod
+            _renderer_mod.tqdm = _ProgressTqdm
+            from samesh.models import shape_diameter_function as _sdf_mod
+            _sdf_mod.tqdm = _ProgressTqdm
+
             from samesh.models.sam_mesh import segment_mesh
 
             cache_dir = None
