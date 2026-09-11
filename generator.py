@@ -1,3 +1,4 @@
+import hashlib
 import io
 import json
 import os
@@ -6,6 +7,7 @@ import tempfile
 import time
 import uuid
 import gc
+import zipfile
 from pathlib import Path
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
@@ -231,6 +233,8 @@ class SAMeshGenerator(BaseGenerator):
         render_res = _safe_int(params.get("render_resolution", 1024), 1024)
         points_per_side = _safe_int(params.get("points_per_side", 32), 32)
         smoothing_iters = _safe_int(params.get("smoothing_iterations", 64), 64)
+        camera_method = params.get("camera_method", "icosahedron")
+        use_cache = params.get("cache", False)
 
         model_config_name, checkpoint_name = _SAM2_CONFIG_MAP[sam2_size]
         checkpoint_path = self._find_checkpoint(sam2_size)
@@ -245,8 +249,9 @@ class SAMeshGenerator(BaseGenerator):
                     "Check your internet connection and try again." % (_LOG, sam2_size)
                 )
 
-        print("%s params: sam2=%s modes=%s res=%d pps=%d smooth=%d"
-              % (_LOG, sam2_size, use_modes, render_res, points_per_side, smoothing_iters))
+        print("%s params: sam2=%s modes=%s res=%d pps=%d smooth=%d cam=%s cache=%s"
+              % (_LOG, sam2_size, use_modes, render_res, points_per_side,
+                 smoothing_iters, camera_method, use_cache))
 
         _keep_system_awake(True)
         self._report(progress_cb, 5, "Loading SAMesh...")
@@ -258,8 +263,19 @@ class SAMeshGenerator(BaseGenerator):
             from omegaconf import OmegaConf
             from samesh.models.sam_mesh import segment_mesh
 
+            cache_dir = None
+            if use_cache:
+                cache_key = "%s_%d_%d_%s" % (
+                    sam2_size, render_res, points_per_side,
+                    "_".join(sorted(use_modes)),
+                )
+                cache_hash = hashlib.md5(cache_key.encode()).hexdigest()[:12]
+                cache_dir = self.outputs_dir / "cache" / cache_hash
+                cache_dir.mkdir(parents=True, exist_ok=True)
+                print("%s Cache dir: %s" % (_LOG, cache_dir))
+
             config = OmegaConf.create({
-                "cache": None,
+                "cache": str(cache_dir) if cache_dir else None,
                 "cache_overwrite": False,
                 "output": str(self.outputs_dir),
                 "sam": {
@@ -291,7 +307,7 @@ class SAMeshGenerator(BaseGenerator):
                 },
                 "renderer": {
                     "target_dim": [render_res, render_res],
-                    "camera_generation_method": "icosahedron",
+                    "camera_generation_method": camera_method,
                     "renderer_args": {"interpolate_norms": True},
                     "sampling_args": {"radius": 2},
                     "lighting_args": {},
@@ -302,13 +318,14 @@ class SAMeshGenerator(BaseGenerator):
 
             with torch.inference_mode():
                 torch.cuda.empty_cache()
-                segmented_mesh = segment_mesh(
-                    filename=mesh_path,
-                    config=config,
-                    visualize=False,
-                    extension="glb",
-                    texture=False,
-                )
+                with torch.autocast(device_type="cuda", dtype=torch.float16):
+                    segmented_mesh = segment_mesh(
+                        filename=mesh_path,
+                        config=config,
+                        visualize=False,
+                        extension="glb",
+                        texture=False,
+                    )
 
             self._check_cancelled(cancel_event)
             self._report(progress_cb, 85, "Splitting into parts...")
@@ -317,9 +334,9 @@ class SAMeshGenerator(BaseGenerator):
 
             self._report(progress_cb, 95, "Exporting...")
             self.outputs_dir.mkdir(parents=True, exist_ok=True)
-            out_path = self.outputs_dir / (
-                "%d_%s_segmented.glb" % (int(time.time()), uuid.uuid4().hex[:8])
-            )
+            timestamp = "%d_%s" % (int(time.time()), uuid.uuid4().hex[:8])
+            scene_path = self.outputs_dir / ("%s_segmented.glb" % timestamp)
+            zip_path = self.outputs_dir / ("%s_parts.zip" % timestamp)
 
             scene = trimesh.Scene()
             for i, part_mesh in enumerate(parts):
@@ -328,14 +345,20 @@ class SAMeshGenerator(BaseGenerator):
                     node_name="part_%d" % i,
                     geom_name="part_%d" % i,
                 )
+            scene.export(str(scene_path))
+            print("%s Scene GLB: %s (%d parts)" % (_LOG, scene_path, len(parts)))
 
-            scene.export(str(out_path))
-            print("%s Exported %d parts to %s" % (_LOG, len(parts), out_path))
+            with zipfile.ZipFile(str(zip_path), "w", zipfile.ZIP_DEFLATED) as zf:
+                for i, part_mesh in enumerate(parts):
+                    buf = io.BytesIO()
+                    part_mesh.export(buf, file_type="glb")
+                    zf.writestr("part_%d.glb" % i, buf.getvalue())
+            print("%s Parts ZIP: %s" % (_LOG, zip_path))
 
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             self._report(progress_cb, 100, "Done")
-            return str(out_path)
+            return str(scene_path)
 
         finally:
             _keep_system_awake(False)

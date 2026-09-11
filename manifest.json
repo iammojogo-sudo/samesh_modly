@@ -81,8 +81,20 @@
               "label": "512 (fast)"
             },
             {
+              "value": 768,
+              "label": "768 (balanced)"
+            },
+            {
               "value": 1024,
               "label": "1024 (default)"
+            },
+            {
+              "value": 1536,
+              "label": "1536 (high)"
+            },
+            {
+              "value": 2048,
+              "label": "2048 (ultra, slow)"
             }
           ],
           "tooltip": "Resolution of multiview renders. Higher = better segmentation but slower."
@@ -116,6 +128,42 @@
           "min": 0,
           "max": 200,
           "tooltip": "Number of boundary smoothing iterations. 0 = no smoothing, 64 = default."
+        },
+        {
+          "id": "camera_method",
+          "label": "Camera Views",
+          "type": "select",
+          "default": "icosahedron",
+          "options": [
+            {
+              "value": "tetrahedron",
+              "label": "Tetrahedron (4 views, fastest)"
+            },
+            {
+              "value": "octohedron",
+              "label": "Octohedron (6 views, fast)"
+            },
+            {
+              "value": "cube",
+              "label": "Cube (8 views)"
+            },
+            {
+              "value": "icosahedron",
+              "label": "Icosahedron (12 views, default)"
+            },
+            {
+              "value": "dodecahedron",
+              "label": "Dodecahedron (20 views, best coverage)"
+            }
+          ],
+          "tooltip": "Number of camera views for multiview rendering. More views = better surface coverage but proportionally slower."
+        },
+        {
+          "id": "cache",
+          "label": "Cache Renders",
+          "type": "boolean",
+          "default": false,
+          "tooltip": "Cache rendered views and SAM masks to disk. Subsequent runs with the same settings skip the render+SAM phase entirely. Cache auto-invalidates when any setting changes."
         }
       ]
     }
